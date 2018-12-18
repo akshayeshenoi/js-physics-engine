@@ -1,0 +1,228 @@
+<canvas id="canvas-2d" id="canvas-2d" width=500 height=600>
+</canvas>
+
+<script>
+  window.onload = function() {
+    const canvasElem = document.getElementById('canvas-2d');
+    const ctx = canvasElem.getContext("2d");
+
+    window.addEventListener("keydown", doSomething);
+
+    // start gameplay
+    function step() {
+      window.requestAnimationFrame(game(step, ctx));
+    }
+    step();
+  } 
+
+  // Play God.
+  const CONSTANTS = {
+    CANVAS_WIDTH: 500,
+    CANVAS_HEIGHT: 600,
+    DEF_X_VELOCITY: 0,
+    DEF_Y_VELOCITY: 1,
+    DEF_X_COORD: 0,
+    DEF_Y_COORD: 0,
+    DEF_X_ACCELERATION: 10,
+    DEF_Y_ACCELERATION: 10,
+    SQUARE_SIDE_LENGTH: 50,
+    PLATFORM_SIDE_LENGTH: 75,
+    PLATFORM_SIDE_HEIGHT: 20,
+    PLATFORM_Y_VELOCITY: 3,
+    GRAVITY: 0.20,
+    AIR_FRICTION: 0.5,
+    WALL_FRICTION: 0.3
+  }
+
+
+  /**
+   * STATE takes care of active game state
+   * `square` is our player
+   * `platforms` are.. platforms
+   * `occupiedGrid` maintains state of currently occupied blocks in the playing area
+   * it is a map of the 'top' y coordinate against the x one
+   */
+  const STATE = {
+    square: getSqaure(),
+    platforms: [getPlatform()],
+    occupiedGrid: {}
+  };
+
+  function getSqaure() {
+    return {
+      x: CONSTANTS.DEF_X_COORD,
+      y: CONSTANTS.DEF_Y_COORD,
+      xv: CONSTANTS.DEF_X_VELOCITY,
+      yv: CONSTANTS.DEF_Y_VELOCITY,
+      ax: 0,
+      ay: 0,
+      freeze: false,
+      color: "#b95353",
+      jumpCount: 0,
+      collision: true,
+      previousPlatform: null,
+      currentPlatform: null
+    }
+  }
+
+  function getPlatform() {
+    return {
+      x: getRandomColoumn(),
+      y: 0,
+      yv: CONSTANTS.PLATFORM_Y_VELOCITY,
+      color: "#000000",
+      newest: true
+    }
+  }
+
+  function getRandomColoumn() {
+    const randInt = Math.floor(Math.random() * 10) % 3;
+
+    switch(randInt) {
+      case 0:
+        return 30;
+      case 1:
+        return 200;
+      case 2: 
+        return 330;
+    }
+  }
+
+  function spawnPlatform() {
+    STATE.platforms.unshift(getPlatform());
+  }
+
+  function doSomething(keyboardEvent) {
+    if (keyboardEvent.code == "ArrowUp" && STATE.square.jumpCount < 2) {
+      if (STATE.square.yv < 0) {
+        STATE.square.ay -= CONSTANTS.DEF_Y_ACCELERATION - 5;  
+      } else {
+        STATE.square.ay -= CONSTANTS.DEF_Y_ACCELERATION;
+      }
+
+      STATE.square.jumpCount++;
+      STATE.square.collision = false;
+      STATE.square.previousPlatform = STATE.square.currentPlatform;
+      STATE.square.currentPlatform = null;
+    }
+    if (keyboardEvent.code == "ArrowLeft") STATE.square.ax -= CONSTANTS.DEF_X_ACCELERATION;
+    if (keyboardEvent.code == "ArrowRight") STATE.square.ax += CONSTANTS.DEF_X_ACCELERATION;
+  }
+
+  function insideX(value) {
+    return (value < 0 || value > CONSTANTS.CANVAS_WIDTH - CONSTANTS.SQUARE_SIDE_LENGTH) ? false : true;
+  }
+
+  function insideY(newY, boxHeight) {
+    return (newY > CONSTANTS.CANVAS_HEIGHT - boxHeight) ? false : true;
+  }
+
+  function updatePhysics() {
+
+    const square = STATE.square;
+
+    // update platforms state
+    let popPlatform = false;
+    let addPlatform = false;
+    STATE.platforms.forEach(platform => {
+
+      const newY = platform.y + platform.yv;
+      if (insideY(newY, CONSTANTS.PLATFORM_SIDE_HEIGHT)) {
+        platform.y = newY;
+      } else {
+        // platform has reached bottom. time to pop from array
+        popPlatform = true;
+      }
+
+      // add a new platform if the threshold is reached
+      if (platform.newest && platform.y > 200) {
+        platform.newest = false;
+        addPlatform = true;
+      }
+
+      // check for collision with box
+      if (square.collision == false && square.previousPlatform != platform && square.yv > 0){
+        if (Math.abs((square.y + CONSTANTS.SQUARE_SIDE_LENGTH) - platform.y) < 3) {
+          // it's at the same height (y dimesnsion), check for x dimension
+          if (square.x >= platform.x - CONSTANTS.SQUARE_SIDE_LENGTH && square.x <= platform.x + CONSTANTS.PLATFORM_SIDE_LENGTH) {
+            // it's a collision
+            square.collision = true;
+            square.currentPlatform = platform;
+          }
+        }
+      }
+    });
+
+    // update platforms queue
+    if (popPlatform) STATE.platforms.pop();
+    if (addPlatform) spawnPlatform();
+
+    // update square physics
+    if (square.collision) {
+      // x velocity is zero, y velocity is = platform velocity
+      square.xv = 0;
+      square.yv = CONSTANTS.PLATFORM_Y_VELOCITY + square.ay;
+
+      square.jumpCount = 0;
+    } else {
+      if (square.xv > 0) {
+        const newXVel = square.xv - CONSTANTS.AIR_FRICTION;
+        square.xv = newXVel >=0 ? newXVel : 0;
+      }
+      else if (square.xv < 0) {
+        const newXVel = square.xv + CONSTANTS.AIR_FRICTION;
+        square.xv = newXVel <=0 ? newXVel : 0;
+      }
+      // add air friction if traveling in x direction. check for velocity going under 0
+      square.xv = square.xv + square.ax;
+
+      // set y velocity
+      square.yv = square.yv + square.ay + CONSTANTS.GRAVITY;
+    }
+
+    const newX = square.x + square.xv;
+    if (insideX(newX)) {
+      square.x = newX;
+    } else {
+      // square reached right/left position, reverse velocity and add friction
+      square.xv = -square.xv + square.xv*CONSTANTS.WALL_FRICTION;
+    }
+
+    const newY = square.y + square.yv;
+    if (insideY(newY, CONSTANTS.SQUARE_SIDE_LENGTH)) {
+      square.y = newY;
+    } else {
+      // square reached bottom position, reverse velocity and add friction
+      square.yv = -square.yv + square.yv * CONSTANTS.WALL_FRICTION;
+      // reset jump
+      square.jumpCount = 0;
+    }
+
+    // resetting horizontal acceleration
+    square.ax = 0;
+    square.ay = 0;
+  }
+
+  function paint(ctx) {
+    ctx.fillStyle = "#f3f3f3";
+    ctx.fillRect(0, 0, CONSTANTS.CANVAS_WIDTH, CONSTANTS.CANVAS_HEIGHT);
+
+    // paint squares
+    ctx.fillStyle = STATE.square.color;
+    ctx.fillRect(STATE.square.x, STATE.square.y, CONSTANTS.SQUARE_SIDE_LENGTH, CONSTANTS.SQUARE_SIDE_LENGTH);
+
+    // paint platforms
+    STATE.platforms.forEach(platform => {
+      ctx.fillStyle = platform.color;
+      ctx.fillRect(platform.x, platform.y, CONSTANTS.PLATFORM_SIDE_LENGTH, CONSTANTS.PLATFORM_SIDE_HEIGHT);
+    })
+  }
+
+  function game(step, ctx) {
+    return function() {
+      updatePhysics();
+      paint(ctx);
+      step();
+    }
+  }
+</script>
