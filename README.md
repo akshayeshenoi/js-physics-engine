@@ -11,7 +11,7 @@ The game runs entirely in any browser that supports the `<canvas>` element and i
 The foundational concepts are:
 - Infinite Game Loop
 - Game state
-- Phyics
+- Physics
 - Window paint
 
 
