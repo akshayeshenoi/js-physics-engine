@@ -8,7 +8,7 @@ Box jump is a simple game that demonstrates the basics of game development, part
 
 The game runs entirely in any browser that supports the `<canvas>` element and is written in Vanilla JavaScript.  
 
-The foundational concepts are as follows:
+The foundational concepts are:
 - Infinite Game Loop
 - Game state
 - Phyics
